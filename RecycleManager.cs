@@ -178,7 +178,7 @@ namespace Oxide.Plugins
                 if (slot == null)
                     continue;
 
-                if (!blacklistedItems.Contains(slot.info.shortname))
+                if (!blacklistedItems.Contains(slot.info.shortname) && ItemManager.FindItemDefinition(slot.info.itemid).Blueprint?.ingredients?.Count > 0)
                 {
                     stopRecycle = false;
                     break;
@@ -191,7 +191,8 @@ namespace Oxide.Plugins
 
         private object OnRecycleItem(Recycler recycler, Item item)
         {
-            if (blacklistedItems.Contains(item.info.shortname))
+            var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
+            if (blacklistedItems.Contains(item.info.shortname) || bp?.ingredients?.Count == 0)
             {
                 item.Drop(recycler.transform.TransformPoint(new Vector3(-0.3f, 1.7f, 1f)), Vector3.up, new Quaternion());
                 return false;
@@ -206,7 +207,6 @@ namespace Oxide.Plugins
                 usedItems = maxItemsPerRecycle;
 
             item.UseItem(usedItems);
-            var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
             foreach (ItemAmount ingredient in bp.ingredients)
             {
                 var shortname = ingredient.itemDef.shortname;
