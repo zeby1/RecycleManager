@@ -180,14 +180,12 @@ namespace Oxide.Plugins
         {
             var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
 
-            bool flag = false;
             int usedItems = 1;
 
             if (item.amount > 1)
                 usedItems = item.amount;
             if (usedItems > maxItemsPerRecycle)
                 usedItems = maxItemsPerRecycle;
-
             item.UseItem(usedItems);
             foreach (ItemAmount ingredient in bp.ingredients)
             {
@@ -214,24 +212,12 @@ namespace Oxide.Plugins
                         continue;
                 }
 
-
-                if (!recycler.MoveItemToOutput(ItemManager.CreateByItemID(ingredient.itemDef.itemid, Convert.ToInt32(outputamount))))
-                    flag = true;
-            }
-            if (flag || !recycler.HasRecyclable())
-            {
-                recycler.StopRecycling();
-                for (int i = 5; i <= 11; i++)
+                if (!recycler.MoveItemToOutput(ItemManager.CreateByItemID(ingredient.itemDef.itemid, Convert.ToInt32(outputamount))) || !recycler.HasRecyclable())
                 {
-                    Item _item = recycler.inventory.GetSlot(i);
-                    if (_item == null) continue;
-                    if (_item.IsValid())
-                        if (outputBlacklistedItems.Contains(_item.info.shortname))
-                        {
-                            _item.Remove();
-                            _item.RemoveFromContainer();
-                        }
+                    recycler.StopRecycling();
+                    return false;
                 }
+                   
             }
             return true;
         }
