@@ -171,20 +171,7 @@ namespace Oxide.Plugins
 
         private object CanRecycle(Recycler recycler, Item item)
         {
-            bool stopRecycle = true;
-            for (int i = 0; i < 6; i++)
-            {
-                Item slot = recycler.inventory.GetSlot(i);
-                if (slot == null)
-                    continue;
-
-                if (!blacklistedItems.Contains(slot.info.shortname) && ItemManager.FindItemDefinition(slot.info.itemid).Blueprint?.ingredients?.Count > 0)
-                {
-                    stopRecycle = false;
-                    break;
-                }
-            }
-            if (stopRecycle)
+            if (blacklistedItems.Contains(item.info.shortname) || item.info.Blueprint == null || item.info.Blueprint.ingredients?.Count == 0)
                 return false;
             return true;
         }
@@ -192,11 +179,6 @@ namespace Oxide.Plugins
         private object OnRecycleItem(Recycler recycler, Item item)
         {
             var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
-            if (blacklistedItems.Contains(item.info.shortname) || bp?.ingredients?.Count == 0)
-            {
-                item.Drop(recycler.transform.TransformPoint(new Vector3(-0.3f, 1.7f, 1f)), Vector3.up, new Quaternion());
-                return false;
-            }
 
             bool flag = false;
             int usedItems = 1;
