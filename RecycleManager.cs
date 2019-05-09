@@ -178,7 +178,10 @@ namespace Oxide.Plugins
 
         private object OnRecycleItem(Recycler recycler, Item item)
         {
+
             var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
+            if (bp == null || bp.ingredients?.Count == 0)
+                return false;
 
             int usedItems = 1;
 
@@ -187,6 +190,7 @@ namespace Oxide.Plugins
             if (usedItems > maxItemsPerRecycle)
                 usedItems = maxItemsPerRecycle;
             item.UseItem(usedItems);
+
             foreach (ItemAmount ingredient in bp.ingredients)
             {
                 var shortname = ingredient.itemDef.shortname;
