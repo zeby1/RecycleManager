@@ -23,6 +23,7 @@ namespace Oxide.Plugins
         private const string permissionNameADMIN = "recyclemanager.admin";
         private const string permissionNameCREATE = "recyclemanager.create";
         private int maxItemsPerRecycle = 100;
+        private int scrapID;
 
         private static Dictionary<string, object> Multipliers()
         {
@@ -83,6 +84,8 @@ namespace Oxide.Plugins
                 ["RemoveRecycler CHAT EntityWasRemoved"] = "The targeted entity was removed",
 
             }, this);
+
+            scrapID = ItemManager.FindItemDefinition("scrap").itemid;
         }
 
         [ChatCommand("addrecycler")]
@@ -200,10 +203,11 @@ namespace Oxide.Plugins
                 if (multiplyList.ContainsKey(shortname))
                     multi = Convert.ToDouble(multiplyList[shortname]);
                 double outputamount = 0;
-                if (shortname == "scrap")
+
+                if (ingredient.itemDef.itemid == scrapID)
                     outputamount = Convert.ToDouble(usedItems * Convert.ToDouble(bp.scrapFromRecycle) * multi);
                 else
-                    outputamount = Convert.ToDouble(usedItems * Convert.ToDouble(ingredient.amount / (2*bp.amountToCreate)) * multi);
+                    outputamount = Convert.ToDouble(usedItems * Convert.ToDouble(ingredient.amount / (2 * bp.amountToCreate)) * multi);
 
                 // when the batch is returning less than 1 we'll give the chance to return it.
                 // For large batches users will get back the percentage ie 25% pipes out of 10 HE grens ends up being 2 pipes every time, but 1 HE will give 25% chance
@@ -216,13 +220,11 @@ namespace Oxide.Plugins
                         continue;
                 }
 
-                if (!recycler.MoveItemToOutput(ItemManager.CreateByItemID(ingredient.itemDef.itemid, Convert.ToInt32(outputamount))) || !recycler.HasRecyclable())
-                {
+                if (!recycler.MoveItemToOutput(ItemManager.CreateByItemID(ingredient.itemDef.itemid, Convert.ToInt32(outputamount))))
                     recycler.StopRecycling();
-                    return false;
-                }
-                   
             }
+            if (!recycler.HasRecyclable())
+                recycler.StopRecycling();
             return true;
         }
 
