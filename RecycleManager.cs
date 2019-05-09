@@ -17,46 +17,7 @@ namespace Oxide.Plugins
 
         #region Data
 
-        private DynamicConfigFile OutputData;
-        private StoredData storedData;
-
-        private void SaveData()
-        {
-            storedData.table = ingredientList;
-            OutputData.WriteObject(storedData);
-        }
-
-        private void LoadData()
-        {
-            try
-            {
-                storedData = OutputData.ReadObject<StoredData>();
-                ingredientList = storedData.table;
-            }
-            catch
-            {
-                Puts("Failed to load data, creating new file");
-                storedData = new StoredData();
-            }
-        }
-
-        private class StoredData
-        {
-            public Dictionary<string, List<ItemInfo>> table = new Dictionary<string, List<ItemInfo>>();
-        }
-
         #endregion
-
-        private class ItemInfo
-        {
-            public string itemName;
-            public int itemAmount;
-        }
-
-        private class IngredientInfo
-        {
-            public List<ItemInfo> items;
-        }
 
         public float recycleTime = 5.0f;
         private const string permissionNameADMIN = "recyclemanager.admin";
@@ -65,26 +26,25 @@ namespace Oxide.Plugins
 
         private static Dictionary<string, object> Multipliers()
         {
-            var at = new Dictionary<string, object> {{"*", 1}, {"metal.refined", 1}};
+            var at = new Dictionary<string, object> { { "*", 1 }, { "metal.refined", 1 } };
             return at;
         }
 
         private static List<object> Blacklist()
         {
-            var at = new List<object> {"hemp.seed"};
+            var at = new List<object> { "hemp.seed" };
             return at;
         }
 
         private static List<object> OutputBlacklist()
         {
-            var at = new List<object> {"hemp.seed"};
+            var at = new List<object> { "hemp.seed" };
             return at;
         }
 
         private List<object> blacklistedItems;
         private List<object> outputBlacklistedItems;
         private Dictionary<string, object> multiplyList;
-        private Dictionary<string, List<ItemInfo>> ingredientList = new Dictionary<string, List<ItemInfo>>();
 
         private void LoadVariables()
         {
@@ -110,8 +70,6 @@ namespace Oxide.Plugins
             LoadVariables();
             permission.RegisterPermission(permissionNameADMIN, this);
             permission.RegisterPermission(permissionNameCREATE, this);
-            OutputData = Interface.Oxide.DataFileSystem.GetFile("RecycleManager");
-            LoadData();
 
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -125,12 +83,6 @@ namespace Oxide.Plugins
                 ["RemoveRecycler CHAT EntityWasRemoved"] = "The targeted entity was removed",
 
             }, this);
-        }
-
-        private void OnServerInitialized()
-        {
-            if (ingredientList.Count == 0)
-                RefreshIngredientList();
         }
 
         [ChatCommand("addrecycler")]
@@ -206,25 +158,6 @@ namespace Oxide.Plugins
             player.ChatMessage(msg("RemoveRecycler CHAT EntityWasRemoved", player.UserIDString));
         }
 
-        [ConsoleCommand("recyclemanager.reloadingredientlist")]
-        private void reloadDataCONSOLECMD(ConsoleSystem.Arg args)
-        {
-            if (args.Connection != null)
-                return;
-            OutputData = Interface.Oxide.DataFileSystem.GetFile("RecycleManager");
-            LoadData();
-            Puts("Recycler output list has successfully been updated!");
-        }
-
-        [ConsoleCommand("recyclemanager.updateingredientlist")]
-        private void UpdateIngredientListCMD(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection != null)
-                return;
-            UpdateIngredientList();
-            Puts("Recycler ingredients list has been updated!");
-        }
-
         private void OnRecyclerToggle(Recycler recycler, BasePlayer player)
         {
             if (recycler.IsOn())
@@ -245,7 +178,7 @@ namespace Oxide.Plugins
                 if (slot == null)
                     continue;
 
-                if (!blacklistedItems.Contains(slot.info.shortname) && ingredientList.ContainsKey(slot.info.shortname))
+                if (!blacklistedItems.Contains(slot.info.shortname))
                 {
                     stopRecycle = false;
                     break;
@@ -258,7 +191,7 @@ namespace Oxide.Plugins
 
         private object OnRecycleItem(Recycler recycler, Item item)
         {
-            if (!ingredientList.ContainsKey(item.info.shortname) || blacklistedItems.Contains(item.info.shortname))
+            if (blacklistedItems.Contains(item.info.shortname))
             {
                 item.Drop(recycler.transform.TransformPoint(new Vector3(-0.3f, 1.7f, 1f)), Vector3.up, new Quaternion());
                 return false;
@@ -273,17 +206,34 @@ namespace Oxide.Plugins
                 usedItems = maxItemsPerRecycle;
 
             item.UseItem(usedItems);
-            foreach (ItemInfo ingredient in ingredientList[item.info.shortname])
+            var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
+            foreach (ItemAmount ingredient in bp.ingredients)
             {
+                var shortname = ingredient.itemDef.shortname;
                 double multi = 1;
                 if (multiplyList.ContainsKey("*"))
                     multi = Convert.ToDouble(multiplyList["*"]);
-                if (multiplyList.ContainsKey(ingredient.itemName))
-                    multi = Convert.ToDouble(multiplyList[ingredient.itemName]);
-                int outputamount = Convert.ToInt32(usedItems * Convert.ToDouble(ingredient.itemAmount) * multi);
+                if (multiplyList.ContainsKey(shortname))
+                    multi = Convert.ToDouble(multiplyList[shortname]);
+                double outputamount = 0;
+                if (shortname == "scrap")
+                    outputamount = Convert.ToDouble(usedItems * Convert.ToDouble(bp.scrapFromRecycle) * multi);
+                else
+                    outputamount = Convert.ToDouble(usedItems * Convert.ToDouble(ingredient.amount / (2*bp.amountToCreate)) * multi);
+
+                // when the batch is returning less than 1 we'll give the chance to return it.
+                // For large batches users will get back the percentage ie 25% pipes out of 10 HE grens ends up being 2 pipes every time, but 1 HE will give 25% chance
                 if (outputamount < 1)
-                    continue;
-                if (!recycler.MoveItemToOutput(ItemManager.CreateByName(ingredient.itemName, outputamount)))
+                {
+                    var rnd = Oxide.Core.Random.Range(100);
+                    if (rnd < outputamount * 100)
+                        outputamount = 1;
+                    else
+                        continue;
+                }
+
+
+                if (!recycler.MoveItemToOutput(ItemManager.CreateByItemID(ingredient.itemDef.itemid, Convert.ToInt32(outputamount))))
                     flag = true;
             }
             if (flag || !recycler.HasRecyclable())
@@ -302,37 +252,6 @@ namespace Oxide.Plugins
                 }
             }
             return true;
-        }
-
-        private void RefreshIngredientList()
-        {
-            foreach (ItemDefinition itemInfo in ItemManager.itemList)
-            {
-                if (itemInfo.Blueprint == null)
-                    continue;
-                if (itemInfo.Blueprint.ingredients?.Count == 0)
-                    continue;
-                List<ItemInfo> x = itemInfo.Blueprint.ingredients?.Select(entry => new ItemInfo {itemAmount = (int) entry.amount / 2, itemName = entry.itemDef.shortname}).ToList();
-                ingredientList.Add(itemInfo.shortname, x);
-            }
-            SaveData();
-        }
-
-        private void UpdateIngredientList()
-        {
-            foreach (ItemDefinition itemInfo in ItemManager.itemList)
-            {
-                if (itemInfo.Blueprint == null)
-                    continue;
-                if (itemInfo.Blueprint.ingredients?.Count == 0)
-                    continue;
-                if (ingredientList.ContainsKey(itemInfo.shortname))
-                    continue;
-                List<ItemInfo> x = itemInfo.Blueprint.ingredients?.Select(entry => new ItemInfo { itemAmount = (int)entry.amount / 2, itemName = entry.itemDef.shortname }).ToList();
-                ingredientList.Add(itemInfo.shortname, x);
-            }
-            SaveData();
-            LoadData();
         }
 
         private object GetConfig(string menu, string datavalue, object defaultValue)
