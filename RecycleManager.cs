@@ -180,7 +180,7 @@ namespace Oxide.Plugins
         {
 
             var bp = ItemManager.FindItemDefinition(item.info.itemid).Blueprint;
-            if (bp == null || bp.ingredients?.Count == 0)
+            if (blacklistedItems.Contains(item.info.shortname) || bp == null || bp.ingredients?.Count == 0)
                 return false;
 
             int usedItems = 1;
